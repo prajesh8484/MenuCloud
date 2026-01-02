@@ -1,21 +1,27 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const path = require('path');
 const connectDB = require('./config/db');
+const adminRoutes = require('./routes/adminRoutes');
+const menuRoutes = require('./routes/menuRoutes');
+const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const cors = require('cors');
 
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config();
 
 connectDB();
 
 const app = express();
 
-const adminRoutes = require('./routes/adminRoutes');
-const menuRoutes = require('./routes/menuRoutes');
-const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+// CORS configuration
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 app.use(express.json());
-app.use(cors());
+app.use(express.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
   res.send('API is running...');
@@ -23,12 +29,11 @@ app.get('/', (req, res) => {
 
 app.use('/api/admin', adminRoutes);
 app.use('/api/menu', menuRoutes);
+app.use('/api/upload', require('./routes/uploadRoutes'));
 
 app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

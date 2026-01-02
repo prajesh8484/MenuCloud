@@ -13,6 +13,7 @@ const createMenu = asyncHandler(async (req, res) => {
   const menuExists = await Menu.findOne({ admin: req.admin._id });
 
   if (menuExists) {
+    console.error('Error 400: Menu already exists for this admin');
     res.status(400);
     throw new Error('Menu already exists for this admin');
   }
@@ -33,6 +34,7 @@ const createMenu = asyncHandler(async (req, res) => {
       uniqueId: menu.uniqueId,
     });
   } else {
+    console.error('Error 400: Invalid menu data');
     res.status(400);
     throw new Error('Invalid menu data');
   }
@@ -47,6 +49,7 @@ const getAdminMenu = asyncHandler(async (req, res) => {
   if (menu) {
     res.json(menu);
   } else {
+    console.error('Error 404: Menu not found for this admin');
     res.status(404);
     throw new Error('Menu not found for this admin');
   }
@@ -56,27 +59,38 @@ const getAdminMenu = asyncHandler(async (req, res) => {
 // @route   POST /api/menu/items
 // @access  Private
 const createMenuItem = asyncHandler(async (req, res) => {
-  const { name, description, price, category, image, tags } = req.body;
-
   const menu = await Menu.findOne({ admin: req.admin._id });
 
   if (!menu) {
+    console.error('Error 404: Menu not found for this admin. Create a menu first.');
     res.status(404);
     throw new Error('Menu not found for this admin. Create a menu first.');
   }
 
-  const menuItem = new MenuItem({
-    menu: menu._id,
-    name,
-    description,
-    price,
-    category,
-    image,
-    tags,
-  });
-
-  const createdMenuItem = await menuItem.save();
-  res.status(201).json(createdMenuItem);
+  try {
+    const menuItemData = {
+      menu: menu._id,
+      name,
+      description,
+      price,
+      category,
+      image,
+      tags: tags || [],
+      available: available !== undefined ? available : true,
+    };
+    
+    // console.log('Creating menu item with data:', menuItemData);
+    
+    const menuItem = new MenuItem(menuItemData);
+    const createdMenuItem = await menuItem.save();
+    // console.log('Menu item created successfully:', createdMenuItem);
+    res.status(201).json(createdMenuItem);
+  } catch (error) {
+    console.error('Error creating menu item:', error);
+    console.error('Validation errors:', error.errors);
+    res.status(400);
+    throw new Error('Invalid menu item data');
+  }
 });
 
 // @desc    Get all menu items for logged-in admin's menu
@@ -86,6 +100,7 @@ const getMenuItems = asyncHandler(async (req, res) => {
   const menu = await Menu.findOne({ admin: req.admin._id });
 
   if (!menu) {
+    console.error('Error 404: Menu not found for this admin.');
     res.status(404);
     throw new Error('Menu not found for this admin.');
   }
@@ -105,10 +120,12 @@ const getMenuItemById = asyncHandler(async (req, res) => {
     if (menu && menuItem.menu.toString() === menu._id.toString()) {
       res.json(menuItem);
     } else {
+      console.error('Error 401: Not authorized to view this menu item');
       res.status(401);
       throw new Error('Not authorized to view this menu item');
     }
   } else {
+    console.error('Error 404: Menu item not found');
     res.status(404);
     throw new Error('Menu item not found');
   }
@@ -118,7 +135,7 @@ const getMenuItemById = asyncHandler(async (req, res) => {
 // @route   PUT /api/menu/items/:id
 // @access  Private
 const updateMenuItem = asyncHandler(async (req, res) => {
-  const { name, description, price, category, image, tags, isUnavailable } = req.body;
+  const { name, description, price, category, image, tags, available } = req.body;
 
   const menuItem = await MenuItem.findById(req.params.id);
 
@@ -131,15 +148,23 @@ const updateMenuItem = asyncHandler(async (req, res) => {
       menuItem.category = category || menuItem.category;
       menuItem.image = image || menuItem.image;
       menuItem.tags = tags || menuItem.tags;
-      menuItem.isUnavailable = isUnavailable !== undefined ? isUnavailable : menuItem.isUnavailable;
+      menuItem.available = available !== undefined ? available : menuItem.available;
 
-      const updatedMenuItem = await menuItem.save();
-      res.json(updatedMenuItem);
+      try {
+        const updatedMenuItem = await menuItem.save();
+        res.json(updatedMenuItem);
+      } catch (error) {
+        console.error('Error updating menu item:', error);
+        res.status(400);
+        throw new Error('Invalid menu item data');
+      }
     } else {
+      console.error('Error 401: Not authorized to update this menu item');
       res.status(401);
       throw new Error('Not authorized to update this menu item');
     }
   } else {
+    console.error('Error 404: Menu item not found');
     res.status(404);
     throw new Error('Menu item not found');
   }
@@ -157,10 +182,12 @@ const deleteMenuItem = asyncHandler(async (req, res) => {
       await menuItem.deleteOne();
       res.json({ message: 'Menu item removed' });
     } else {
+      console.error('Error 401: Not authorized to delete this menu item');
       res.status(401);
       throw new Error('Not authorized to delete this menu item');
     }
   } else {
+    console.error('Error 404: Menu item not found');
     res.status(404);
     throw new Error('Menu item not found');
   }
@@ -176,13 +203,14 @@ const getPublicMenu = asyncHandler(async (req, res) => {
     const menuItems = await MenuItem.find({ menu: menu._id });
     res.json({ restaurantName: menu.restaurantName, menuItems });
   } else {
+    console.error('Error 404: Menu not found');
     res.status(404);
     throw new Error('Menu not found');
   }
 });
 
 // @desc    Generate QR code for the menu
-// @route   GET /api/qr/:uniqueId
+// @route   GET /api/menu/qr/:uniqueId
 // @access  Public
 const getQrCode = asyncHandler(async (req, res) => {
   const { uniqueId } = req.params;
@@ -190,10 +218,39 @@ const getQrCode = asyncHandler(async (req, res) => {
 
   try {
     const qrCodeImage = await QRCode.toDataURL(menuUrl);
-    res.send(`<img src="${qrCodeImage}">`);
+    res.json({ qrCode: qrCodeImage });
   } catch (err) {
     console.error(err);
     res.status(500).send('Error generating QR code');
+  }
+});
+
+// @desc    Regenerate menu link
+// @route   POST /api/menu/regenerate-link
+// @access  Private
+const regenerateMenuLink = asyncHandler(async (req, res) => {
+  const menu = await Menu.findOne({ admin: req.admin._id });
+
+  if (!menu) {
+    res.status(404);
+    throw new Error('Menu not found for this admin');
+  }
+
+  const newUniqueId = generateUniqueId();
+  menu.uniqueId = newUniqueId;
+  
+  try {
+    const updatedMenu = await menu.save();
+    res.json({
+      _id: updatedMenu._id,
+      admin: updatedMenu.admin,
+      restaurantName: updatedMenu.restaurantName,
+      uniqueId: updatedMenu.uniqueId,
+    });
+  } catch (error) {
+    console.error('Error regenerating menu link:', error);
+    res.status(400);
+    throw new Error('Failed to regenerate menu link');
   }
 });
 
@@ -207,4 +264,5 @@ module.exports = {
   deleteMenuItem,
   getPublicMenu,
   getQrCode,
+  regenerateMenuLink,
 };

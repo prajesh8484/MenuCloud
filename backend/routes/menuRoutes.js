@@ -9,6 +9,7 @@ const {
   deleteMenuItem,
   getPublicMenu,
   getQrCode,
+  regenerateMenuLink,
 } = require('../controllers/menuController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -22,7 +23,8 @@ router
   .put(protect, updateMenuItem)
   .delete(protect, deleteMenuItem);
 
-router.route('/:uniqueId').get(getPublicMenu);
+router.route('/regenerate-link').post(protect, regenerateMenuLink);
 router.route('/qr/:uniqueId').get(getQrCode);
+router.route('/:uniqueId').get(getPublicMenu);
 
 module.exports = router;
