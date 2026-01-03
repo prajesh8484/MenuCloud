@@ -6,7 +6,7 @@
 </p>
 
 ## Description
-**MenuCloud** is a digital menu platform built with **MERN Stack, It allows restaurant owners to create, manage, and share digital menus via unique QR codes for a seamless guest experience.
+**MenuCloud** is a digital menu platform built with **MERN Stack**, It allows restaurant owners to create, manage, and share digital menus via unique QR codes for a seamless guest experience.
 
 ## Table of Contents
 
